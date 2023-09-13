@@ -7,7 +7,6 @@
 
 using namespace heaphook;
 
-constexpr size_t kMemPoolSize = 0x4000000ull;
 size_t kMemPoolBaseAddress;
 
 void write_chunk_to_stderr(Chunk *chunk) {
@@ -16,7 +15,7 @@ void write_chunk_to_stderr(Chunk *chunk) {
   write_to_stderr("Chunk(", reinterpret_cast<void *>(offset), "): prev_size = ", 
     reinterpret_cast<void *>(chunk->prev_size), 
     ", size = ", reinterpret_cast<void *>(chunk->size), ", ", 
-    chunk->is_used() ? "(USED) > " : "(NOT USED) > ", " ", chunk->buf, "\n");
+    chunk->is_used() ? "(USED)" : "(NOT USED)", "\n");
 }
 
 class SimpleAllocator : public GlobalAllocator {
@@ -25,24 +24,38 @@ class SimpleAllocator : public GlobalAllocator {
   alignas(0x1000) char mem_pool_[kMemPoolSize];
 
   void *do_alloc(size_t bytes, size_t align) override {
-    if (align > 1) {
-      write_to_stderr("cannot align memory!\n");
+    size_t size = request_to_chunk_size(bytes); // size bytes chunk has a buf larger than bytes
+    if (size > kMaxChunkSize) {
       return nullptr;
     }
-    size_t size = request_to_chunk_size(bytes); // size bytes chunk has a buf larger than bytes
-    Chunk *chunk = first_chunk_;
-    while (true) {
-      if (!chunk->is_used() && size <= chunk->get_chunk_size()) {
-        break;
+    if (align == 1) { // no alignment
+      Chunk *chunk = first_chunk_;
+      while (true) {
+        if (!chunk->is_used() && size <= chunk->get_chunk_size()) {
+          break;
+        }
+        chunk = chunk->next();
       }
-      chunk = chunk->next();
+      if (size + kMinChunkSize <= chunk->get_chunk_size()) {
+        chunk->split(size);
+      }
+      chunk->set_used_flag();
+      void *retval = reinterpret_cast<void *>(chunk->buf);
+      return retval;
+    } else {
+      Chunk *tmp_chunk = buf_to_chunk_ptr(do_alloc(size + kChunkHdrSize + kMinChunkSize + align, 1));
+      size_t buf_addr = reinterpret_cast<size_t>(tmp_chunk->buf);
+      if (buf_addr % align == 0) {
+        return tmp_chunk->buf;
+      } else {
+        tmp_chunk->clear_used_flag();
+        size_t return_addr = (buf_addr + kMinChunkSize + kChunkHdrSize + align) & ~(align - 1);
+        tmp_chunk->split(return_addr - buf_addr - kChunkHdrSize + 0x10);
+        auto return_chunk = tmp_chunk->next();
+        return_chunk->set_used_flag();
+        return return_chunk->buf;
+      }
     }
-    if (size + kMinChunkSize <= chunk->get_chunk_size()) {
-      chunk->split(size);
-    }
-    chunk->set_used_flag();
-    void *retval = reinterpret_cast<void *>(chunk->buf);
-    return retval;
   }
  
   void do_dealloc(void *ptr) override {
@@ -60,7 +73,6 @@ public:
   SimpleAllocator() : mem_pool_{} {
     kMemPoolBaseAddress = reinterpret_cast<size_t>(mem_pool_);
     memset(mem_pool_, 0, kMemPoolSize);
-    write_to_stderr("\n🐬\n");
     first_chunk_ = reinterpret_cast<Chunk *>(mem_pool_);
     first_chunk_->prev_size = 0;
     first_chunk_->size = kMemPoolSize;
@@ -69,9 +81,6 @@ public:
     top_ = first_chunk_->next();
     strcpy(first_chunk_->buf, "FIRST CHUNK");
     strcpy(top_->buf, "TOP!!");
-
-    write_chunk_to_stderr(first_chunk_);
-    write_chunk_to_stderr(top_);
   }
 };
 

@@ -2,7 +2,10 @@
 #include <cstddef>
 #include <cassert>
 
+constexpr size_t kMemPoolSize = 0x4000000ull;
+const size_t kChunkHdrSize = 0x10;
 const size_t kMinChunkSize = 0x20;
+const size_t kMaxChunkSize = kMemPoolSize;
 
 // |-----------+-----------|
 // | prev_size |    size |U|
