@@ -25,6 +25,10 @@ class SimpleAllocator : public GlobalAllocator {
   alignas(0x1000) char mem_pool_[kMemPoolSize];
 
   void *do_alloc(size_t bytes, size_t align) override {
+    if (align > 1) {
+      write_to_stderr("cannot align memory!\n");
+      return nullptr;
+    }
     size_t size = request_to_chunk_size(bytes); // size bytes chunk has a buf larger than bytes
     Chunk *chunk = first_chunk_;
     while (true) {

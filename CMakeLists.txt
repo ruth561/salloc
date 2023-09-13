@@ -7,8 +7,6 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(heaphook REQUIRED)
-message("heaphook_SOURCE_DIR: ${heaphook_SOURCE_DIR}")
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -25,5 +23,13 @@ endif()
 build_library(salloc
   src/salloc.cpp
   src/utils.cpp)
-  
-ament_package()
+
+test_library(test_salloc
+  src/salloc.cpp
+  src/utils.cpp)
+
+ament_add_gtest(test_heaphook_by_salloc ../../test/test_heaphook.cpp src/salloc.cpp src/utils.cpp ${HEAPHOOK_SOURCES})
+target_include_directories(test_heaphook_by_salloc
+  PRIVATE ${heaphook_SOURCE_DIR}/include)
+
+  ament_package()
