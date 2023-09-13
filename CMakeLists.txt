@@ -32,4 +32,4 @@ ament_add_gtest(test_heaphook_by_salloc ../../test/test_heaphook.cpp src/salloc.
 target_include_directories(test_heaphook_by_salloc
   PRIVATE ${heaphook_SOURCE_DIR}/include)
 
-  ament_package()
+ament_package()
